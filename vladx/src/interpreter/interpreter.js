@@ -323,8 +323,14 @@ export class Interpreter {
             case 'SequenceExpression':
                 return this.evaluateSequenceExpression(expr);
 
+            case 'ArrayPattern':
+                return this.evaluateArrayPattern(expr);
+
+            case 'ObjectPattern':
+                return this.evaluateObjectPattern(expr);
+
             default:
-                throw new Error(`Неизвестный тип выражения: '${expr.type}'. Доступные типы: Literal, Identifier, BinaryExpression, UnaryExpression, CallExpression, MemberExpression, Assignment, MemberAssignment, AssignmentExpression, CompoundAssignmentExpression, BitwiseExpression, TemplateLiteral, ArrayExpression, ObjectExpression, FunctionDeclaration, ArrowFunctionExpression, TernaryExpression, ImportExpression, SequenceExpression`);
+                throw new Error(`Неизвестный тип выражения: '${expr.type}'. Доступные типы: Literal, Identifier, BinaryExpression, UnaryExpression, CallExpression, MemberExpression, Assignment, MemberAssignment, AssignmentExpression, CompoundAssignmentExpression, BitwiseExpression, TemplateLiteral, ArrayExpression, ObjectExpression, FunctionDeclaration, ArrowFunctionExpression, TernaryExpression, ImportExpression, SequenceExpression, ArrayPattern, ObjectPattern`);
         }
     }
 
@@ -1007,6 +1013,59 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
         }
 
         return VladXObject.array(elements);
+    }
+
+    /**
+     * Паттерн массива (для деструктуризации, но может встречаться как выражение)
+     */
+    async evaluateArrayPattern(expr) {
+        const elements = [];
+
+        if (expr.elements) {
+            for (const el of expr.elements) {
+                if (el && el.type === 'SpreadElement') {
+                    const spreadValue = await this.evaluateExpression(el.argument);
+                    const spreadArray = spreadValue && spreadValue.value ? spreadValue.value : [];
+
+                    if (Array.isArray(spreadArray)) {
+                        elements.push(...spreadArray);
+                    } else {
+                        // Если это не массив, просто добавляем значение
+                        elements.push(spreadValue);
+                    }
+                } else {
+                    elements.push(await this.evaluateExpression(el));
+                }
+            }
+        }
+
+        return VladXObject.array(elements);
+    }
+
+    /**
+     * Паттерн объекта (для деструктуризации, но может встречаться как выражение)
+     */
+    async evaluateObjectPattern(expr) {
+        const obj = {};
+
+        if (expr.properties) {
+            for (const prop of expr.properties) {
+                if (!prop) continue;
+
+                let key = null;
+                if (prop.key) {
+                    key = prop.key.value || prop.key.name || String(prop.key);
+                }
+
+                const value = await this.evaluateExpression(prop.value);
+
+                if (key !== null) {
+                    obj[key] = value;
+                }
+            }
+        }
+
+        return VladXObject.object(obj);
     }
 
     /**
