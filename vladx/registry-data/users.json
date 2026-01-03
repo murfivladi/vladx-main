@@ -1,0 +1,9 @@
+{
+  "testuser": {
+    "name": "testuser",
+    "password": "$2b$10$vJSiu6m2TTLJDV8UekoLVuxIlbmP.YuUn3kFbmrotUvzyqI3Hsn1K",
+    "email": "test@example.com",
+    "createdAt": "2026-01-03T13:20:41.647Z",
+    "updatedAt": "2026-01-03T13:20:41.647Z"
+  }
+}

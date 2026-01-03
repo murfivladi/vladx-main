@@ -1,0 +1,122 @@
+{
+  "hello-world": {
+    "_id": "hello-world",
+    "name": "hello-world",
+    "description": "Простой тестовый пакет для VladX (еще более обновленная версия)",
+    "dist-tags": {
+      "latest": "1.0.2"
+    },
+    "versions": {
+      "1.0.1": {
+        "name": "hello-world",
+        "version": "1.0.1",
+        "description": "Простой тестовый пакет для VladX (обновленная версия)",
+        "main": "index.vx",
+        "keywords": [
+          "vladx",
+          "test",
+          "hello",
+          "updated"
+        ],
+        "author": "Test User",
+        "license": "MIT",
+        "dependencies": {},
+        "devDependencies": {},
+        "_id": "hello-world@1.0.1",
+        "dist": {
+          "shasum": "be682329a26a8482490ebdcc91ac739618152b18",
+          "integrity": "sha512-o0fWiJUMBmT7TQcXsbHEvsKF9SEl5LiNiCVAHzL5KcOTnePkKH70qPEC3JaynnHpImk7RdQK4u5nX2d6p7UKnw==",
+          "tarball": "http://localhost:4873/hello-world/-/hello-world-1.0.1.tgz"
+        }
+      },
+      "1.0.0": {
+        "name": "hello-world",
+        "version": "1.0.0",
+        "description": "Простой тестовый пакет для VladX",
+        "main": "index.vx",
+        "keywords": [
+          "vladx",
+          "test",
+          "hello"
+        ],
+        "author": "Test User",
+        "license": "MIT",
+        "dependencies": {},
+        "devDependencies": {},
+        "_id": "hello-world@1.0.0",
+        "dist": {
+          "shasum": "04603fb63d7d3deff67a06ef0a4dc53d084e1fb0",
+          "integrity": "sha512-9aKuE0iiw4wyhOfFUuSK93SPhqtsrdQRJ62IdT4f3WM3Om+liLicOBOcxy3tb9e3xBl5tiQergrJNCekQbgEiw==",
+          "tarball": "http://localhost:4873/hello-world/-/hello-world-1.0.0.tgz"
+        }
+      },
+      "1.0.2": {
+        "name": "hello-world",
+        "version": "1.0.2",
+        "description": "Простой тестовый пакет для VladX (еще более обновленная версия)",
+        "main": "index.vx",
+        "keywords": [
+          "vladx",
+          "test",
+          "hello",
+          "updated",
+          "new"
+        ],
+        "author": "Test User",
+        "license": "MIT",
+        "dependencies": {},
+        "devDependencies": {},
+        "_id": "hello-world@1.0.2",
+        "dist": {
+          "shasum": "49932fd03b7b2de03d781959387856d1217f1ba9",
+          "integrity": "sha512-rHw3ohHxxqcLAKfBkYsBsMdjv9OrsNSjNnYYtlPs1jojq2y6WbS7WVZx/wdaHz2Sy53DVO7NU9LU+OhmKxbfyg==",
+          "tarball": "http://localhost:4873/hello-world/-/hello-world-1.0.2.tgz"
+        }
+      }
+    },
+    "_attachments": {
+      "hello-world-1.0.1.tgz": {
+        "content_type": "application/octet-stream",
+        "data": "H4sIAAAAAAAC/+2VzW7TQBDHc/ZTDD61aZus2ySVeubCgVtBSAghK17R0NSJbPcDRZESB8EBUC7ceYU0SkSaD+cV/vNGaNdxC21UKvVDVPh/We/M7szOrn7jul3et9/JfD0ec+/9mpu5YwkhSoUCLbMrFbdKlNkqloRllUqiQBlhWcXiJmVE5gF06Ae2lxHiDooUQtD5+EjUMIhM1z6Q5g6Ze7JarW0c17yqY64rx5H0/ErNVT4rJ3JWbHWkX/Yq9WDhwQ9uIeI2h4hwRhxiuJj0+QvOCHP0MMaQQ8IAE+7Sy6rtvKIVRDjFTK3DBEPMMEOPu4Q+htziNkbcXY0zHtgVnariOvIkd3QSW/flh+Oa5/jmDr02iNR5q7YTO4nMQPpB8q0rSyaHdccOpGMaRG90IPsw2Kt5KsGu9AN64UsvzlCtlKXr67t5/mw3qb4uXUe65YpUmRvNhfXo6WWH0fz333/BfV7f3L3Q/3f+rc0r/G+WtlP+U/5vzn+CfoL9OfIXuP/3rF/Hf3Kz95Hjev4tsV24zL/YLoqU/4dQPps1KEua4ZEmLyRMMeIWbSxBeYoIA+5gwl/1tu8YattMLVMhuMUdHYRb6OEUEYfcIW7/1gXQUwniJmBQNm8Y/JE7mGHMnxTzhPnFYVYwwpS7q9TQ/251Hkwwokt27esjwk/0VWYOF31pEWadTFqjeA+tkfnE1NuayqS6zmcMbxwpvp4kgtG8ev4BorfcRh8jDNDDTFlvVQgijNG7bRFJlCUFfMOY25gj4haH1PjjCdaXF0SPtOOlSpUqVSqlX016RHIAEgAA",
+        "length": 612
+      }
+    }
+  },
+  "@testuser/my-utils": {
+    "_id": "@testuser/my-utils",
+    "name": "@testuser/my-utils",
+    "description": "My utility functions",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "@testuser/my-utils",
+        "version": "1.0.0",
+        "description": "My utility functions",
+        "main": "index.vx",
+        "keywords": [
+          "utils",
+          "helpers"
+        ],
+        "author": "Test User",
+        "license": "MIT",
+        "dependencies": {},
+        "devDependencies": {},
+        "_id": "@testuser/my-utils@1.0.0",
+        "dist": {
+          "shasum": "c0d7dc348afba288a53aed82a5ec69c6e5a5a4c8",
+          "integrity": "sha512-4gqbpG6c2kGqh3Vc3G10GDS8T3kozKUACzULNXJwrIete3nlTqLNFGZR31HPuhvdOf2l0fJGoxZzY6r5WQ+k8Q==",
+          "tarball": "http://localhost:4873/@testuser/my-utils/-/testuser-my-utils-1.0.0.tgz"
+        }
+      }
+    },
+    "_attachments": {
+      "testuser-my-utils-1.0.0.tgz": {
+        "content_type": "application/octet-stream",
+        "data": "H4sIAAAAAAAC/+2VwU7CQBBAe96vGPekROlWSkk4efDigRuejIemXaUCpem2CCEkWIw34y/4CUhiJBjxF2b/yJSCJEjCBUgMfZdNZmZndrN5Wc+0quYtV71kzd6JhqtsGMaYoeuwKh6jsxwoubzBNM0wmA4K07S8ngOFKTsgFIHpK4xt4JKMMfhd/wkdAkBds85pEehZwEUQCu6r9fZJGDg1QY/jfJP7wmm4cYmWZVmWRG0uLN/xglmm1IZ4ixO04SZ0rTg82143nWmF49q8lW22kmiVt+8bvi1oEa4IAABdTASgFV7zuC8oAbie1pthUGn4cZ8yFwFcCu4njWqOxV0xvUDpojw/m8ddm7uWw+MBne4s2jxfTpCuss/MvFebNdNubcX+tf7njMIf/08LhdT//fF/rv5C+9T53fo/f5ttzFjj/6lmLPvPCno+9X8XqJkMgQyskpdARiVEPso+fuFYPuFIvoDsywhH+IkjGeHg8Ag60+8ahzjBDxzKHg5kBBRfcYBvOImL8F1GB5R0CZHPOJYP+I0T2ZMRdJa6QaplSkpKys74AaJxJJcAEAAA",
+        "length": 432
+      }
+    }
+  }
+}
