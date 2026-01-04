@@ -44,7 +44,8 @@ export class Environment {
             return this.parent.get(name);
         }
         
-        return undefined;
+        throw new Error(`Переменная "${name}" не найдена в окружении ${this.name}`);
+
     }
 
     /**

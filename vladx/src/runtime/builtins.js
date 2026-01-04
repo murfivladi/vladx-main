@@ -32,8 +32,18 @@ export class Builtins {
                 return VladXObject.null();
             },
             время: () => {
-                return VladXObject.number(Date.now());
-            }
+    const now = new Date();
+    return VladXObject.object({
+        миллисекунды: now.getTime(),
+        год: now.getFullYear(),
+        месяц: now.getMonth() + 1,
+        день: now.getDate(),
+        час: now.getHours(),
+        минута: now.getMinutes(),
+        секунда: now.getSeconds()
+    });
+}
+
         });
 
         // Модуль для работы с файловой системой

@@ -16,7 +16,9 @@ import { VladXEngine } from '../src/engine/vladx-engine.js';
 let engine = new VladXEngine();
 
 // ==================== КОНСТАНТЫ ====================
-const VERSION = '1.0.0';
+import pkg from '../package.json' assert { type: 'json' };
+const VERSION = pkg.version;
+
 const HISTORY_PATH = path.join(os.homedir(), '.vladx', 'repl-history.txt');
 const MAX_HISTORY = 1000;
 const MAX_BUFFER_SIZE = 50000; // Ограничение на размер буфера (защита от OOM)
@@ -237,7 +239,8 @@ class VladXRepl {
      */
     async start() {
         const readline = await import('readline');
-        
+        this.history = loadHistory();
+
         this.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout,
@@ -466,17 +469,44 @@ async function compileFile(inputPath, outputPath = null) {
 // ==================== ГЛАВНАЯ ФУНКЦИЯ ====================
 async function main() {
     const options = parseCommandLine(process.argv);
-    
+    if (options.version) {
+    console.log(`VladX v${VERSION}`);
+    process.exit(0);
+}
+if (options.help) {
+    console.log(`
+VladX — интерпретируемый язык программирования
+
+Использование:
+  vlad                  Запуск REPL
+  vlad file.vx           Выполнить файл
+  vlad -e "код"          Выполнить код
+  vlad -c file.vx -o out.js  Скомпилировать в JS
+
+Опции:
+  -h, --help             Справка
+  -v, --version          Версия
+  --debug                Режим отладки
+  --no-timeout           Отключить лимит времени
+`);
+    process.exit(0);
+}
+
     // Настройка движка
     engine.debug = options.debug;
     engine.maxExecutionTime = options.timeout;
 
     switch (options.mode) {
         case 'eval':
+            if (options.mode === 'eval' && !options.evalCode) {
+                console.error('❌ Не указан код для --eval');
+                process.exit(1);
+            }
+
             await executeCode(options.evalCode);
             break;
         case 'compile':
-            await compileFile(options.compile, options.outputPath);
+            await compileFile(options.file, options.outputPath);
             break;
         case 'file':
             await runFile(options.file, options.programArgs);

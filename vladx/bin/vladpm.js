@@ -4,6 +4,7 @@
  * VladX Package Manager (vladpm) — Менеджер пакетов
  * Мощный менеджер пакетов для языка VladX
  */
+import { spawn } from 'child_process';
 
 import {
     readFileSync, writeFileSync, existsSync, mkdirSync,
@@ -1180,6 +1181,37 @@ async function unpublishPackage(packageSpecifier) {
         return false;
     }
 }
+function runScript(scriptName) {
+    const pkg = readPackageJson();
+    if (!pkg.scripts || !pkg.scripts[scriptName]) {
+        console.error(`❌ Скрипт "${scriptName}" не найден в vladx.json`);
+        return;
+    }
+
+    const command = pkg.scripts[scriptName];
+    console.log(`🚀 Запуск скрипта "${scriptName}": ${command}`);
+
+    // Спавним процесс, передавая stdio напрямую в консоль
+    const [cmd, ...args] = command.split(' ');
+    const child = spawn(cmd, args, { stdio: 'inherit', shell: true });
+
+    child.on('exit', code => {
+        console.log(`🛑 Скрипт "${scriptName}" завершился с кодом ${code}`);
+    });
+}
+function listScripts() {
+    const pkg = readPackageJson();
+    if (!pkg.scripts || Object.keys(pkg.scripts).length === 0) {
+        console.log('📄 Скрипты не найдены в vladx.json');
+        return;
+    }
+
+    console.log('📄 Скрипты проекта:\n');
+    for (const [name, command] of Object.entries(pkg.scripts)) {
+        console.log(`  ${name}: ${command}`);
+    }
+    console.log('');
+}
 
 /**
  * Главная функция
@@ -1341,6 +1373,19 @@ async function main() {
         case 'auth':
             await loginToRegistry();
             break;
+        case 'скрипт':
+case 'run':
+    if (filteredArgs.length === 0) {
+        console.log('Использование: vladpm run <имя_скрипта>');
+    } else {
+        const scriptName = filteredArgs[0];
+        runScript(scriptName);
+    }
+    break;
+case 'скрипты':
+case 'scripts':
+    listScripts();
+    break;
 
         case 'выход':
         case 'logout':

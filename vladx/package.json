@@ -1,8 +1,24 @@
 {
+  "name": "vladx-main",
+  "version": "1.1.0",
+  "description": "VladX — язык программирования с русским синтаксисом и CLI-инструментами",
+  "license": "MIT",
+  "author": "VladX Team",
   "type": "module",
+  "bin": {
+    "vladpm": "./bin/vladpm.js",
+    "vlad": "./bin/vlad.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
-    "crypto": "^1.0.1",
     "lodash": "^4.17.21",
     "tar": "^7.5.2"
-  }
+  },
+  "devDependencies": {},
+  "engines": {
+  "node": ">=18"
+}
+
 }

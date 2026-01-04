@@ -625,8 +625,8 @@ export class Lexer {
     /**
      * Подглядывание следующего символа
      */
-    peek() {
-        return this.source[this.pos + 1] || null;
+    peek(offset = 1) {
+        return this.source[this.pos + offset] || null;
     }
 
     /**
