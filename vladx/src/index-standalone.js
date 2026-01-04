@@ -156,6 +156,52 @@ const Functional = {
             console.log(label, x);
             return x;
         };
+    },
+
+    flip(fn) {
+        return (...args) => fn(...args.reverse());
+    },
+
+    once(fn) {
+        let called = false;
+        return (...args) => {
+            if (called) return;
+            called = true;
+            return fn(...args);
+        };
+    },
+
+    trace: (label) => {
+        return function(x) {
+            console.log(label, x);
+            return x;
+        };
+    }
+};
+    },
+
+    trace(label = 'trace') => {
+        return function(x) {
+            console.log(label, x);
+            return x;
+        };
+    }
+
+    once(fn) {
+        let called = false;
+        return (...args) => {
+            if (called) return result;
+            called = true;
+            result = fn(...args);
+            return result;
+        };
+    },
+
+    trace(label = 'trace') => {
+        return function(x) {
+            console.log(label, x);
+            return x;
+        };
     }
 };
     },

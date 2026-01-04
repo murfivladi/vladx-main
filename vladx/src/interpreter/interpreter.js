@@ -90,6 +90,17 @@ export class Interpreter {
 
         return result;
     }
+
+    /**
+     * Запуск выполнения
+     */
+    startExecution() {
+        if (this.maxExecutionTime > 0 && !this.executionTimer) {
+            this.executionTimer = setTimeout(() => {
+                this.stopExecution();
+                throw new Error(`Превышено максимальное время выполнения (${this.maxExecutionTime}мс)`);
+            }, this.maxExecutionTime);
+        }
     }
 
     /**
@@ -113,7 +124,7 @@ export class Interpreter {
         const callee = await this.evaluateExpression(expr.callee);
         const args = [];
 
-        for (const arg of expr.args) {
+        for (const arg of expr.args || []) {
             if (arg && arg.type === 'SpreadElement') {
                 const spreadValue = await this.evaluateExpression(arg.argument);
                 const spreadArray = spreadValue && spreadValue.value ? spreadValue.value : [];
@@ -203,8 +214,9 @@ export class Interpreter {
                 try {
                     this.currentEnv = closureEnv;
 
-                    for (let i = 0; i < (callee.params?.length || 0); i++) {
-                        const paramName = callee.params[i]?.name || `arg${i}`;
+                    const params = callee.params || [];
+                    for (let i = 0; i < params.length; i++) {
+                        const paramName = params[i]?.name || `arg${i}`;
                         this.currentEnv.define(paramName, VladXObject.fromJS(args[i]));
                     }
 
@@ -253,7 +265,6 @@ export class Interpreter {
      */
     async evaluateStatementDebug(stmt) {
         return await this.evaluateStatement(stmt);
-    }
     }
 
     /**
@@ -330,12 +341,22 @@ export class Interpreter {
         if (this.builtinsRegistered) {
             return; // Уже зарегистрировано
         }
-        
+
         for (const [name, fn] of this.builtins) {
             this.globalEnv.define(name, VladXObject.function(fn, name), true);
         }
-        
+
         this.builtinsRegistered = true;
+    }
+
+    /**
+     * Обновить окружение с текущими встроенными функциями
+     */
+    refreshBuiltins() {
+        // Register all built-ins in the global environment
+        for (const [name, fn] of this.builtins) {
+            this.globalEnv.define(name, VladXObject.function(fn, name), true);
+        }
     }
 
     /**
@@ -1968,65 +1989,6 @@ export class Interpreter {
         }
     }
 
-        // Evaluate cases
-        for (const caseStmt of stmt.cases) {
-            if (!matched) {
-                const caseValue = await this.evaluateExpression(caseStmt.test);
-                const caseValueValue = caseValue && caseValue.value !== undefined ? caseValue.value : caseValue;
-
-                // Strict equality comparison
-                if (caseValueValue === discriminantValue) {
-                    matched = true;
-                }
-            }
-
-            if (matched) {
-                // Execute case body
-                for (const statement of caseStmt.consequent) {
-                    try {
-                        result = await this.evaluateStatement(statement);
-
-                        // If we encounter a return, exit the switch
-                        if (this.isReturn) {
-                            return result;
-                        }
-                    } catch (e) {
-                        // If it's a break statement, exit the entire switch
-                        if (e.message === 'break') {
-                            return result; // Exit the entire switch
-                        } else {
-                            // Re-throw other errors
-                            throw e;
-                        }
-                    }
-                }
-            }
-        }
-
-        // If no case matched and there's a default case
-        if (!matched && stmt.defaultCase) {
-            for (const statement of stmt.defaultCase.consequent) {
-                try {
-                    result = await this.evaluateStatement(statement);
-
-                    // If we encounter a return, exit the switch
-                    if (this.isReturn) {
-                        return result;
-                    }
-                } catch (e) {
-                    // If it's a break statement, exit the entire switch
-                    if (e.message === 'break') {
-                        return result; // Exit the entire switch
-                    } else {
-                        // Re-throw other errors
-                        throw e;
-                    }
-                }
-            }
-        }
-
-        return result;
-    }
 
     /**
      * Вычисление выражения (обёртка)

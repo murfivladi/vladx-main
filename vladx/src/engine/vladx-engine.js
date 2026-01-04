@@ -56,6 +56,8 @@ export class VladXEngine {
 
         this.registerBuiltins();
         this.registerAdvancedBuiltins();
+        // Now register the built-ins in the interpreter's environment
+        this.interpreter.refreshBuiltins();
     }
     
     /**

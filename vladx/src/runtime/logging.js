@@ -36,7 +36,8 @@ export class Logging {
     /**
      * Логирование
      */
-    log(level, message, context = {}) {
+    log(level, message, context) {
+        context = context || {};
         if (this.levels[level] < this.levels[this.level]) {
             return;
         }

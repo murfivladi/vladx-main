@@ -38,7 +38,7 @@ export class CLI {
     /**
      * Запуск CLI
      */
-    async run(argv) {
+    async start(argv) {
         const command = argv[2];
         const args = argv.slice(3);
 
@@ -61,19 +61,14 @@ export class CLI {
      * Выполнить файл
      */
     async run(args) {
-        if (args.length === 0) {
-            logger.error('Укажите файл для выполнения');
-            return;
-        }
-
         const filepath = resolve(args[0]);
-        const options = this.parseOptions(args.slice(1));
 
         if (!existsSync(filepath)) {
             throw new Error(`Файл не найден: ${filepath}`);
         }
 
-        const startTime = Date.now();
+        const options = this.parseOptions(args.slice(1));
+
         this.engine = new VladXEngine({
             debug: options.debug || false,
             strictMode: options.strict || false,
@@ -96,7 +91,7 @@ export class CLI {
 
             process.exit(0);
         } catch (error) {
-            logger.error(error.message);
+            logger.error(error.message || error.value || 'Unknown error');
             process.exit(1);
         }
     }
@@ -485,7 +480,7 @@ VladX - Мощный интерпретируемый язык программ�
  */
 if (import.meta.url === `file://${process.argv[1]}`) {
     const cli = new CLI();
-    cli.run(process.argv);
+    cli.start(process.argv);
 }
 
 export default CLI;
