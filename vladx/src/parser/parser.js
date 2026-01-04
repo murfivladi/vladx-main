@@ -479,27 +479,50 @@ export class Parser {
         }
         
         const methods = [];
-        
-        // Тело класса - это блок с методами
+
         this.consume('LBRACE', null, 'Ожидалось {');
-        
+
         while (!this.check('RBRACE') && !this.check('EOF')) {
             if (this.check('NEWLINE')) {
                 this.advance();
                 continue;
             }
-            
-            // Методы внутри класса
+
+            let isStatic = false;
+            let isGetter = false;
+            let isSetter = false;
+            let isAsync = false;
+
+            if (this.check('STATIC') || this.check('СТАТИЧЕСКИЙ')) {
+                this.advance();
+                isStatic = true;
+            }
+
+            if (this.check('GET')) {
+                this.advance();
+                isGetter = true;
+            }
+
+            if (this.check('SET')) {
+                this.advance();
+                isSetter = true;
+            }
+
+            if (this.check('ASYNC') || this.check('АСИНХ')) {
+                this.advance();
+                isAsync = true;
+            }
+
             const methodName = this.consume('IDENTIFIER', null, 'Ожидалось имя метода').value;
-            
+
             this.consume('LPAREN', null, 'Ожидалось (');
-            
+
             const params = [];
             if (!this.check('RPAREN')) {
                 while (true) {
                     const paramName = this.consume('IDENTIFIER', null, 'Ожидался параметр').value;
                     params.push(new ASTNodes.Identifier(paramName));
-                    
+
                     if (this.check('COMMA')) {
                         this.advance();
                     } else {
@@ -507,12 +530,12 @@ export class Parser {
                     }
                 }
             }
-            
+
             this.consume('RPAREN', null, 'Ожидалось )');
-            
+
             const body = this.parseBlockStatement();
-            
-            methods.push(new ASTNodes.FunctionDeclaration(methodName, params, body));
+
+            methods.push(new ASTNodes.ClassMethod(methodName, params, body, isStatic, isGetter, isSetter, isAsync));
         }
         
         this.consume('RBRACE', null, 'Ожидалось }');
@@ -936,6 +959,14 @@ export class Parser {
             case 'IDENTIFIER':
                 return new ASTNodes.Identifier(this.advance().value);
 
+            case 'THIS':
+                this.advance();
+                return new ASTNodes.ThisExpression();
+
+            case 'SUPER':
+                this.advance();
+                return new ASTNodes.SuperExpression();
+
             case 'TEMPLATE_LITERAL':
                 return this.parseTemplateLiteral();
 
@@ -951,6 +982,9 @@ export class Parser {
 
             case 'FUNCTION':
                 return this.parseArrowFunction();
+
+            case 'NEW':
+                return this.parseNewExpression();
 
             default:
                 throw this.error(`Ожидалось выражение, получено: ${token.type}`);
@@ -1334,7 +1368,41 @@ export class Parser {
         if (this.check('SEMICOLON')) {
             this.advance();
         }
-        
+
         return new ASTNodes.ExportStatement(identifiers);
+    }
+
+    /**
+     * New expression - создание экземпляра класса
+     */
+    parseNewExpression() {
+        this.advance();
+
+        const callee = this.parsePrimary();
+
+        const args = [];
+        if (this.check('LPAREN')) {
+            this.advance();
+            if (!this.check('RPAREN')) {
+                while (true) {
+                    if (this.check('SPREAD')) {
+                        this.advance();
+                        const argument = this.parseExpression();
+                        args.push(new ASTNodes.SpreadElement(argument));
+                    } else {
+                        args.push(this.parseExpression());
+                    }
+
+                    if (this.check('COMMA')) {
+                        this.advance();
+                    } else {
+                        break;
+                    }
+                }
+            }
+            this.consume('RPAREN', null, 'Ожидалось )');
+        }
+
+        return new ASTNodes.NewExpression(callee, args);
     }
 }

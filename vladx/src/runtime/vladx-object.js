@@ -30,6 +30,7 @@ export class VladXObject {
         this.name = options.name || null;
         this.prototype = options.prototype || null;
         this.methods = options.methods || new Map();
+        this.staticMethods = options.staticMethods || new Map();
         this.ast = options.ast || null;
     }
 
@@ -67,8 +68,8 @@ export class VladXObject {
         return new VladXObject(types.CLOSURE, null, { env, name, ast });
     }
 
-    static class(name, methods = new Map()) {
-        return new VladXObject(types.CLASS, null, { name, methods });
+    static class(name, methods = new Map(), staticMethods = new Map(), superClass = null) {
+        return new VladXObject(types.CLASS, null, { name, methods, staticMethods, prototype: superClass });
     }
 
     static instance(classObj) {

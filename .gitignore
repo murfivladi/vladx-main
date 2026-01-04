@@ -1,11 +1,11 @@
 /hello
 /programs
-/test-parse.js
-/test-scoped
-/vladx-0.0.1-beta.zip
-/test-scoped-install
 /vladx-web
 /website.zip
 /.vscode
 /papa
 /babushka
+/examples
+/node_modules
+/docs
+/.qodo

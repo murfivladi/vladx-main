@@ -149,6 +149,35 @@ export class Identifier extends Node {
     }
 }
 
+export class ThisExpression extends Node {
+    constructor() {
+        super('ThisExpression');
+    }
+}
+
+export class SuperExpression extends Node {
+    constructor() {
+        super('SuperExpression');
+    }
+}
+
+export class NewExpression extends Node {
+    constructor(callee, args = []) {
+        super('NewExpression');
+        this.callee = callee;
+        this.args = args;
+    }
+}
+
+export class ClassMethod extends FunctionDeclaration {
+    constructor(name, params, body, isStatic = false, isGetter = false, isSetter = false, isAsync = false) {
+        super(name, params, body, isAsync);
+        this.isStatic = isStatic;
+        this.isGetter = isGetter;
+        this.isSetter = isSetter;
+    }
+}
+
 export class BinaryExpression extends Node {
     constructor(operator, left, right) {
         super('BinaryExpression');
@@ -391,11 +420,15 @@ export const ASTNodes = {
     BreakStatement,
     ContinueStatement,
     FunctionDeclaration,
+    ClassMethod,
     ClassDeclaration,
     TryStatement,
     ThrowStatement,
     Literal,
     Identifier,
+    ThisExpression,
+    SuperExpression,
+    NewExpression,
     BinaryExpression,
     UnaryExpression,
     CallExpression,
