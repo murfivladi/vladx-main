@@ -4,7 +4,7 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { dirname, join, extname, isAbsolute } from 'path';
+import { dirname, join, extname, isAbsolute, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { Lexer } from '../lexer/lexer.js';
 import { Parser } from '../parser/parser.js';
@@ -138,13 +138,13 @@ export class ModuleSystem {
                     return packagePath;
                 }
             }
-            // Пробуем найти файл с расширением .vx в этой директории
-            const packageName = basename(packagePath);
-            const vxFile = join(packagePath, packageName + '.vx');
-            if (existsSync(vxFile)) {
-                return vxFile;
-            }
-            return packagePath;
+        // Пробуем найти файл с расширением .vx в этой директории
+        const pkgName = basename(packagePath);
+        const vxFile = join(packagePath, pkgName + '.vx');
+        if (existsSync(vxFile)) {
+            return vxFile;
+        }
+        return packagePath;
         }
 
         const packageJsonPath = join(packagePath, 'package.json');
@@ -293,9 +293,7 @@ export class ModuleSystem {
 
             // Временно меняем окружение
             const oldEnv = this.interpreter.currentEnv;
-            const oldGlobalEnv = this.interpreter.globalEnv;
             this.interpreter.currentEnv = moduleEnv;
-            // Don't change globalEnv, keep it as the original global environment
 
             // Добавляем путь node_modules для вложенных импортов
             const oldPaths = this.nodeModulesPaths;
@@ -321,7 +319,6 @@ export class ModuleSystem {
 
             // Восстанавливаем окружение
             this.interpreter.currentEnv = oldEnv;
-            // globalEnv was not changed, so no need to restore it
 
             // Извлекаем экспорты
             const moduleExports = moduleEnv.exports && Object.keys(moduleEnv.exports).length > 0

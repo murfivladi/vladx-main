@@ -15,7 +15,8 @@ export const types = {
     CLOSURE: 'closure',
     NATIVE: 'native',
     CLASS: 'class',
-    INSTANCE: 'instance'
+    INSTANCE: 'instance',
+    ERROR: 'error'
 };
 
 /**
@@ -158,6 +159,10 @@ export class VladXObject {
 
     isInstance() {
         return this.type === types.INSTANCE;
+    }
+
+    isError() {
+        return this.type === types.ERROR;
     }
 
     // Преобразование в строку

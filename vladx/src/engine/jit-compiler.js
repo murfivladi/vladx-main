@@ -31,6 +31,22 @@ export class JITCompiler {
     }
 
     /**
+     * Проверка, нужно ли компилировать функцию
+     */
+    shouldCompile(functionName) {
+        const count = this.functionCallCounts.get(functionName) || 0;
+        return count >= this.compilationThreshold && !this.compiledFunctions.has(functionName);
+    }
+
+    /**
+     * Увеличение счетчика вызовов функции
+     */
+    incrementCallCount(functionName) {
+        const count = this.functionCallCounts.get(functionName) || 0;
+        this.functionCallCounts.set(functionName, count + 1);
+    }
+
+    /**
      * Компиляция функции VladX в JavaScript
      */
     compileFunction(funcNode, functionName = null) {

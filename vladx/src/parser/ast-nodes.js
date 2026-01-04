@@ -371,10 +371,18 @@ export class RestElement extends Node {
         this.argument = argument;
     }
 }
+
 export class ImportExpression extends Node {
     constructor(path) {
         super('ImportExpression');
         this.path = path;
+    }
+}
+
+export class SequenceExpression extends Node {
+    constructor(expressions) {
+        super('SequenceExpression');
+        this.expressions = expressions;
     }
 }
 
@@ -456,7 +464,8 @@ export const ASTNodes = {
     VariableDeclarationWithPattern,
     SpreadElement,
     AssignmentPattern,
-    RestElement
+    RestElement,
+    SequenceExpression
 };
 
 

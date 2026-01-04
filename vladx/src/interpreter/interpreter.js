@@ -5,6 +5,8 @@
 
 import { VladXObject, types } from '../runtime/vladx-object.js';
 import { Environment } from '../runtime/environment.js';
+import { AsyncManager } from '../runtime/async-manager.js';
+import { Functional } from '../runtime/functional.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,59 +16,244 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export class Interpreter {
     constructor(options = {}) {
         this.debug = options.debug || false;
-        this.maxExecutionTime = options.maxExecutionTime || 9999999999999999;
-        this.startTime = null;
-        
-        // Глобальное окружение
+        this.strictMode = options.strictMode || false;
+        this.maxExecutionTime = options.maxExecutionTime || 30000;
+        this.executionTimer = null;
+        this.moduleSystem = options.moduleSystem || null;
+        this.debugger = options.debugger || null;
+        this.profiler = options.profiler || null;
+
         this.globalEnv = new Environment(null, '<global>');
         this.currentEnv = this.globalEnv;
-        this.callStack = [];
-        
-        // Текущий контекст выполнения
-        this.currentFilename = '<anonymous>';
-        this.currentFunction = null;
+
         this.isReturn = false;
         this.returnValue = null;
-        this.currentInstance = null;
-        
-        // Обработка ошибок
-        this.errorHandler = null;
-        this.handledErrors = new Set();
-        
-        // Встроенные функции
+        this.isBreak = false;
+        this.isContinue = false;
+
         this.builtins = new Map();
-        
-        // Флаг регистрации встроенных функций
-        this.builtinsRegistered = false;
-        
-        // Таймер для защиты от бесконечных циклов
-        this.executionTimer = null;
-        
-        // Система модулей
-        this.moduleSystem = options.moduleSystem || null;
+
+        this.asyncManager = new AsyncManager(options.async);
+        this.currentFilename = '<unknown>';
+        this.currentLine = 0;
+
+        this.registerBuiltins();
     }
 
     /**
-     * Начало выполнения с таймером
+     * Интерпретация программы
      */
-    startExecution() {
-        this.startTime = Date.now();
+    async interpret(ast, options = {}) {
+        const filename = options.filename || '<unknown>';
+        this.currentFilename = filename;
 
         if (this.maxExecutionTime > 0 && !this.executionTimer) {
             this.executionTimer = setTimeout(() => {
+                this.stopExecution();
                 throw new Error(`Превышено максимальное время выполнения (${this.maxExecutionTime}мс)`);
             }, this.maxExecutionTime);
         }
+
+        if (options.environment) {
+            this.currentEnv = options.environment;
+        } else {
+            this.currentEnv = this.globalEnv;
+        }
+
+        let result = VladXObject.null();
+
+        try {
+            // Start profiler if enabled
+            if (this.profiler && !this.profiler.startTime) {
+                this.profiler.start();
+            }
+
+            for (const statement of ast.body) {
+                // Debugger check
+                if (this.debugger) {
+                    this.currentLine = statement.line || 0;
+                    if (this.debugger.checkBreak(filename, statement.line || 0)) {
+                        this.debugger.paused = true;
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                }
+
+                result = await this.evaluateStatement(statement);
+
+                if (this.isReturn) {
+                    return this.returnValue;
+                }
+            }
+        } catch (error) {
+            throw error;
+        }
+
+        return result;
+    }
     }
 
     /**
-     * Остановка таймера
+     * Остановка выполнения
      */
     stopExecution() {
         if (this.executionTimer) {
             clearTimeout(this.executionTimer);
             this.executionTimer = null;
         }
+
+        if (this.asyncManager) {
+            this.asyncManager.clear();
+        }
+    }
+
+    /**
+     * Вызов функции
+     */
+    async evaluateCallExpression(expr) {
+        const callee = await this.evaluateExpression(expr.callee);
+        const args = [];
+
+        for (const arg of expr.args) {
+            if (arg && arg.type === 'SpreadElement') {
+                const spreadValue = await this.evaluateExpression(arg.argument);
+                const spreadArray = spreadValue && spreadValue.value ? spreadValue.value : [];
+
+                if (Array.isArray(spreadArray)) {
+                    args.push(...spreadArray);
+                } else {
+                    args.push(spreadValue);
+                }
+            } else {
+                args.push(await this.evaluateExpression(arg));
+            }
+        }
+
+        const convertToNative = (val) => {
+            if (val && typeof val === 'object' && val.type !== undefined) {
+                if (val.type === 'function' || val.type === 'closure') {
+                    return val;
+                }
+
+                if (val.type === 'null') {
+                    return null;
+                }
+
+                if (val.value !== undefined) {
+                    const rawValue = val.value;
+
+                    if (Array.isArray(rawValue)) {
+                        return rawValue.map(item => convertToNative(item));
+                    } else if (rawValue && typeof rawValue === 'object' && rawValue.constructor === Object) {
+                        const converted = {};
+                        for (const key in rawValue) {
+                            if (rawValue.hasOwnProperty(key)) {
+                                converted[key] = convertToNative(rawValue[key]);
+                            }
+                        }
+                        return converted;
+                    } else {
+                        return rawValue;
+                    }
+                }
+            }
+            return val;
+        };
+
+        const nativeArgs = args.map(convertToNative);
+
+        if (callee && (callee.type === 'function' || callee.isNativeFunction?.())) {
+            // Native function
+            if (this.debugger) {
+                this.debugger.pushFrame({
+                    filename: this.currentFilename,
+                    line: expr.line || 0,
+                    functionName: callee.name || '<anonymous>',
+                    environment: this.currentEnv
+                });
+            }
+
+            try {
+                let result = callee.value(...nativeArgs);
+                if (result && typeof result.then === 'function') {
+                    result = await result;
+                }
+
+                if (this.debugger) {
+                    this.debugger.popFrame();
+                }
+
+                return VladXObject.fromJS(result);
+            } catch (error) {
+                if (this.debugger) {
+                    this.debugger.popFrame();
+                }
+                throw error;
+            }
+        } else if (callee && callee.type === 'closure') {
+            // Closure
+            if (this.profiler && callee.name) {
+                this.profiler.enterFunction(callee.name, callee.ast?.body?.[0]?.filename || this.currentFilename);
+            }
+
+            const closureEnv = this.currentEnv;
+
+            const closure = async (...args) => {
+                const env = this.currentEnv;
+
+                try {
+                    this.currentEnv = closureEnv;
+
+                    for (let i = 0; i < (callee.params?.length || 0); i++) {
+                        const paramName = callee.params[i]?.name || `arg${i}`;
+                        this.currentEnv.define(paramName, VladXObject.fromJS(args[i]));
+                    }
+
+                    let result = VladXObject.null();
+
+                    const body = callee.thenBranch?.body || callee.body || [];
+
+                    for (const stmt of body) {
+                        // Debugger check
+                        if (this.debugger) {
+                            this.currentLine = stmt.line || 0;
+                            if (this.debugger.checkBreak(this.currentFilename, stmt.line || 0)) {
+                                this.debugger.paused = true;
+                                await new Promise(resolve => setTimeout(resolve, 100));
+                            }
+                        }
+
+                        result = await this.evaluateStatement(stmt);
+
+                        if (this.isReturn) {
+                            this.isReturn = false;
+                            return this.returnValue;
+                        }
+                    }
+
+                    return result;
+                } finally {
+                    this.currentEnv = env;
+                }
+            };
+
+            let result = await closure(...nativeArgs);
+
+            if (this.profiler && callee.name) {
+                this.profiler.exitFunction();
+            }
+
+            return result;
+        } else {
+            throw new Error(`${callee?.name || expr.callee} не является функцией`);
+        }
+    }
+
+    /**
+     * Оценка оператора для дебаггера
+     */
+    async evaluateStatementDebug(stmt) {
+        return await this.evaluateStatement(stmt);
+    }
     }
 
     /**
@@ -457,8 +644,8 @@ export class Interpreter {
         const right = await this.evaluateExpression(expr.right);
         
         // Извлекаем "сырые" значения из VladXObject
-        const lval = (left && typeof left === 'object' && 'value' in left) ? left.value : (left ?? '');
-const rval = (right && typeof right === 'object' && 'value' in right) ? right.value : (right ?? '');
+        const lval = (left && left.type !== undefined && 'value' in left) ? left.value : (left ?? '');
+        const rval = (right && right.type !== undefined && 'value' in right) ? right.value : (right ?? '');
         
         switch (expr.operator) {
             case '+': 
@@ -496,11 +683,17 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
     async evaluateUnaryExpression(expr) {
         const operand = await this.evaluateExpression(expr.operand);
         const val = operand && operand.value !== undefined ? operand.value : operand;
-        
+
         switch (expr.operator) {
             case '-': return VladXObject.number(-val);
             case '+': return VladXObject.number(+val);
             case '!': return VladXObject.boolean(!val);
+            case 'не': return VladXObject.boolean(!val);
+            case 'typeof':
+                if (operand && operand.type !== undefined) {
+                    return VladXObject.string(operand.type);
+                }
+                return VladXObject.string(typeof val);
 
             default:
                 throw new Error(`Неизвестный унарный оператор: '${expr.operator}' при вычислении выражения ${expr.operator} ${val}`);
@@ -545,7 +738,7 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
                 }
 
                 if (val.type === 'null') {
-                    return val;
+                    return null;
                 }
 
                 if (val.value !== undefined) {
@@ -951,8 +1144,23 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
      * Шаблонная строка
      */
     async evaluateTemplateLiteral(expr) {
-        // Временная реализация - возвращаем пустую строку
-        return VladXObject.string('');
+        if (!expr || !expr.expressions) {
+            return VladXObject.string('');
+        }
+
+        let result = '';
+
+        for (const quasi of expr.quasis || []) {
+            result += quasi.value || '';
+        }
+
+        for (const exp of expr.expressions || []) {
+            const value = await this.evaluateExpression(exp);
+            const val = value && value.value !== undefined ? value.value : value;
+            result += String(val);
+        }
+
+        return VladXObject.string(result);
     }
 
     /**
@@ -961,15 +1169,15 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
     async evaluateAwaitExpression(expr) {
         const value = await this.evaluateExpression(expr.argument);
 
-        // Если значение является промисом, ожидаем его
-        if (value && typeof value.then === 'function') {
-            const awaitedValue = await value;
-            return awaitedValue;
-        }
-
         // Если это VladXObject с промисом внутри
         if (value && value.value && typeof value.value.then === 'function') {
             const awaitedValue = await value.value;
+            return VladXObject.fromJS(awaitedValue);
+        }
+
+        // Если значение является промисом, ожидаем его
+        if (value && typeof value.then === 'function') {
+            const awaitedValue = await value;
             return VladXObject.fromJS(awaitedValue);
         }
 
@@ -1099,15 +1307,20 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
 
         if (expr.elements) {
             for (const el of expr.elements) {
+                if (!el) {
+                    elements.push(null);
+                    continue;
+                }
+
                 if (el && el.type === 'SpreadElement') {
                     const spreadValue = await this.evaluateExpression(el.argument);
                     const spreadArray = spreadValue && spreadValue.value ? spreadValue.value : [];
 
                     if (Array.isArray(spreadArray)) {
-                        elements.push(...spreadArray);
+                        elements.push(...spreadArray.map(v => VladXObject.fromJS(v)));
                     } else {
                         // Если это не массив, просто добавляем значение
-                        elements.push(spreadValue);
+                        elements.push(VladXObject.fromJS(spreadValue));
                     }
                 } else {
                     elements.push(await this.evaluateExpression(el));
@@ -1119,22 +1332,26 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
     }
 
     /**
-     * Паттерн массива (для деструктуризации, но может встречаться как выражение)
+     * Паттерн массива (для деструктуризации)
      */
     async evaluateArrayPattern(expr) {
         const elements = [];
 
         if (expr.elements) {
             for (const el of expr.elements) {
+                if (!el) {
+                    elements.push(null);
+                    continue;
+                }
+
                 if (el && el.type === 'SpreadElement') {
                     const spreadValue = await this.evaluateExpression(el.argument);
                     const spreadArray = spreadValue && spreadValue.value ? spreadValue.value : [];
 
                     if (Array.isArray(spreadArray)) {
-                        elements.push(...spreadArray);
+                        elements.push(...spreadArray.map(v => VladXObject.fromJS(v)));
                     } else {
-                        // Если это не массив, просто добавляем значение
-                        elements.push(spreadValue);
+                        elements.push(VladXObject.fromJS(spreadValue));
                     }
                 } else {
                     elements.push(await this.evaluateExpression(el));
@@ -1146,7 +1363,7 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
     }
 
     /**
-     * Паттерн объекта (для деструктуризации, но может встречаться как выражение)
+     * Паттерн объекта (для деструктуризации)
      */
     async evaluateObjectPattern(expr) {
         const obj = {};
@@ -1603,6 +1820,153 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
 
         let matched = false;
         let result = VladXObject.null();
+
+        // Execute cases
+        for (const caseStmt of stmt.cases) {
+            if (!matched) {
+                const caseValue = await this.evaluateExpression(caseStmt.test);
+                const caseValueValue = caseValue && caseValue.value !== undefined ? caseValue.value : caseValue;
+
+                // Strict equality comparison
+                if (caseValueValue === discriminantValue) {
+                    matched = true;
+                }
+            }
+
+            if (matched) {
+                // Execute case body
+                for (const statement of caseStmt.consequent) {
+                    try {
+                        result = await this.evaluateStatement(statement);
+
+                        // If we encounter a return, exit switch
+                        if (this.isReturn) {
+                            return result;
+                        }
+                    } catch (e) {
+                        // If it's a break statement, exit entire switch
+                        if (e.message === 'break') {
+                            return result; // Exit entire switch
+                        } else {
+                            // Re-throw other errors
+                            throw e;
+                        }
+                    }
+                }
+            }
+        }
+
+        // If no case matched and there's a default case
+        if (!matched && stmt.defaultCase) {
+            for (const statement of stmt.defaultCase.consequent) {
+                try {
+                    result = await this.evaluateStatement(statement);
+
+                    // If we encounter a return, exit switch
+                    if (this.isReturn) {
+                        return result;
+                    }
+                } catch (e) {
+                    // If it's a break statement, exit entire switch
+                    if (e.message === 'break') {
+                        return result; // Exit entire switch
+                    } else {
+                        // Re-throw other errors
+                        throw e;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Match expression (pattern matching)
+     */
+    async evaluateMatchExpression(expr) {
+        const value = await this.evaluateExpression(expr.value);
+        const valueValue = value && value.value !== undefined ? value.value : value;
+
+        for (const arm of expr.arms) {
+            const pattern = arm.pattern;
+            const guard = arm.guard;
+            const resultExpr = arm.result;
+
+            // Evaluate guard if exists
+            if (guard) {
+                const guardResult = await this.evaluateExpression(guard);
+                const guardValue = guardResult && guardResult.value !== undefined ? guardResult.value : guardResult;
+
+                if (!guardValue) {
+                    continue;
+                }
+            }
+
+            // Match pattern
+            if (this.matchPattern(pattern, valueValue)) {
+                // Bind variables from pattern
+                if (pattern.type === 'Identifier') {
+                    this.currentEnv.define(pattern.name, value);
+                }
+
+                return await this.evaluateExpression(resultExpr);
+            }
+        }
+
+        // No match
+        if (expr.default) {
+            return await this.evaluateExpression(expr.default);
+        }
+
+        throw new Error('Нет совпадения в match');
+    }
+
+    /**
+     * Match pattern
+     */
+    matchPattern(pattern, value) {
+        if (!pattern) return false;
+
+        switch (pattern.type) {
+            case 'Identifier':
+                // Wildcard match
+                if (pattern.name === '_') return true;
+                // Variable bind
+                this.currentEnv.define(pattern.name, VladXObject.fromJS(value));
+                return true;
+
+            case 'Literal':
+                return pattern.value === value;
+
+            case 'ArrayPattern':
+                if (!Array.isArray(value)) return false;
+                if (pattern.elements.length !== value.length) return false;
+
+                for (let i = 0; i < pattern.elements.length; i++) {
+                    if (!this.matchPattern(pattern.elements[i], value[i])) {
+                        return false;
+                    }
+                }
+                return true;
+
+            case 'ObjectPattern':
+                if (typeof value !== 'object' || value === null) return false;
+
+                for (const prop of pattern.properties) {
+                    const key = prop.key?.value || prop.key?.name;
+                    if (!(key in value)) return false;
+
+                    if (!this.matchPattern(prop.value, value[key])) {
+                        return false;
+                    }
+                }
+                return true;
+
+            default:
+                return false;
+        }
+    }
 
         // Evaluate cases
         for (const caseStmt of stmt.cases) {

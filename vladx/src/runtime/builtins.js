@@ -110,30 +110,24 @@ export class Builtins {
     /**
      * Загрузка модуля
      */
-    loadModule(moduleName) {
+    async loadModule(moduleName) {
         if (this.modules.has(moduleName)) {
             return this.modules.get(moduleName);
         }
-        
-        // Попытка загрузить внешний модуль
-        try {
-            const modulePath = require.resolve(moduleName);
-            const module = require(modulePath);
-            return module;
-        } catch (e) {
-            throw new Error(`Модуль "${moduleName}" не найден`);
-        }
+
+        // Внешние модули должны загружаться через module-system
+        throw new Error(`Встроенный модуль "${moduleName}" не найден. Используйте import для внешних модулей.`);
     }
 
     /**
      * Импорт модуля
      */
-    importModule(moduleName, options = {}) {
-        const module = this.loadModule(moduleName);
-        
+    async importModule(moduleName, options = {}) {
+        const module = await this.loadModule(moduleName);
+
         // Создание объекта модуля
         const moduleObj = VladXObject.object({});
-        
+
         for (const [key, value] of Object.entries(module)) {
             if (typeof value === 'function') {
                 moduleObj.value[key] = VladXObject.function(value, key);
@@ -141,7 +135,7 @@ export class Builtins {
                 moduleObj.value[key] = VladXObject.object(value);
             }
         }
-        
+
         return moduleObj;
     }
 }

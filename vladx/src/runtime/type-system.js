@@ -17,25 +17,45 @@ export class TypeSystem {
         // Базовые типы
         this.types.set('число', {
             name: 'число',
-            check: (value) => typeof value === 'number' && !isNaN(value),
+            check: (value) => {
+                if (value && typeof value === 'object' && 'value' in value) {
+                    return typeof value.value === 'number' && !isNaN(value.value);
+                }
+                return typeof value === 'number' && !isNaN(value);
+            },
             defaultValue: 0
         });
 
         this.types.set('строка', {
             name: 'строка',
-            check: (value) => typeof value === 'string',
+            check: (value) => {
+                if (value && typeof value === 'object' && 'value' in value) {
+                    return typeof value.value === 'string';
+                }
+                return typeof value === 'string';
+            },
             defaultValue: ''
         });
 
         this.types.set('логический', {
             name: 'логический',
-            check: (value) => typeof value === 'boolean',
+            check: (value) => {
+                if (value && typeof value === 'object' && 'value' in value) {
+                    return typeof value.value === 'boolean';
+                }
+                return typeof value === 'boolean';
+            },
             defaultValue: false
         });
 
         this.types.set('ничто', {
             name: 'ничто',
-            check: (value) => value === null || value === undefined,
+            check: (value) => {
+                if (value && typeof value === 'object' && 'value' in value) {
+                    return value.value === null || value.value === undefined;
+                }
+                return value === null || value === undefined;
+            },
             defaultValue: null
         });
 
@@ -81,6 +101,22 @@ export class TypeSystem {
      */
     inferType(value) {
         if (value === null || value === undefined) return 'ничто';
+
+        // Если это VladXObject
+        if (value && typeof value === 'object' && 'type' in value) {
+            switch (value.type) {
+                case 'number': return 'число';
+                case 'string': return 'строка';
+                case 'boolean': return 'логический';
+                case 'array': return 'массив';
+                case 'object': return 'объект';
+                case 'function':
+                case 'closure': return 'функция';
+                case 'null': return 'ничто';
+                default: return 'любой';
+            }
+        }
+
         if (typeof value === 'number') return 'число';
         if (typeof value === 'string') return 'строка';
         if (typeof value === 'boolean') return 'логический';

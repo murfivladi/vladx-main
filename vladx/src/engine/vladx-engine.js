@@ -9,6 +9,15 @@ import { Interpreter } from '../interpreter/interpreter.js';
 import { ModuleSystem } from '../runtime/module-system.js';
 import { Builtins } from '../runtime/builtins.js';
 import { VladXObject } from '../runtime/vladx-object.js';
+import { CacheManager } from '../runtime/cache-manager.js';
+import { SecurityManager } from '../runtime/security-manager.js';
+import { Debugger } from '../runtime/debugger.js';
+import { Profiler } from '../runtime/profiler.js';
+import { REPL } from '../runtime/repl.js';
+import { IOOperations } from '../runtime/io-operations.js';
+import { NetworkOperations } from '../runtime/network-operations.js';
+import { Functional } from '../runtime/functional.js';
+import DataStructures from '../runtime/data-structures.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { dirname, join, extname } from 'path';
 import { fileURLToPath } from 'url';
@@ -20,25 +29,33 @@ export class VladXEngine {
         this.debug = options.debug || false;
         this.strictMode = options.strictMode || false;
         this.maxExecutionTime = options.maxExecutionTime || 30000; // 30 секунд по умолчанию
-        
+
+        this.cacheManager = new CacheManager(options.cache);
+        this.securityManager = new SecurityManager(options.security);
+        this.debugger = new Debugger(null);
+        this.profiler = new Profiler();
+
         this.moduleSystem = new ModuleSystem(null);
-        
+        this.moduleSystem.securityManager = this.securityManager;
+
         this.interpreter = new Interpreter({
             debug: this.debug,
             maxExecutionTime: this.maxExecutionTime,
             moduleSystem: this.moduleSystem
         });
-        
-        // Обновляем ссылку на интерпретатор в moduleSystem
-        this.moduleSystem.interpreter = this.interpreter;
-        
+
+        this.interpreter.debugger = this.debugger;
+        this.interpreter.profiler = this.profiler;
+
+        this.ioOperations = new IOOperations(this.securityManager);
+        this.networkOperations = new NetworkOperations(this.securityManager);
+
         this.builtins = new Builtins(this.interpreter);
-        
-        // Инициализируем пути node_modules
+
         this.updateNodeModulesPaths(process.cwd());
-        
-        // Регистрация встроенных модулей
+
         this.registerBuiltins();
+        this.registerAdvancedBuiltins();
     }
     
     /**
@@ -401,7 +418,7 @@ export class VladXEngine {
             try {
                 return readFileSync(path, 'utf-8');
             } catch (e) {
-                throw new VladXObject('error', `Не удалось прочитать файл: ${path}`);
+                throw new Error(`Не удалось прочитать файл: ${path}: ${e.message}`);
             }
         });
         this.interpreter.builtins.set('файлЗаписать', (path, content) => {
@@ -409,7 +426,7 @@ export class VladXEngine {
                 writeFileSync(path, content, 'utf-8');
                 return true;
             } catch (e) {
-                throw new VladXObject('error', `Не удалось записать файл: ${path}`);
+                throw new Error(`Не удалось записать файл: ${path}: ${e.message}`);
             }
         });
         this.interpreter.builtins.set('файлСуществует', (path) => existsSync(path));
@@ -518,7 +535,7 @@ export class VladXEngine {
         this.interpreter.builtins.set('вСтроку', (val) => String(val));
         this.interpreter.builtins.set('вЧисло', (val) => {
             const n = Number(val);
-            if (isNaN(n)) throw new VladXObject('error', 'Не удалось конвертировать в число');
+            if (isNaN(n)) throw new Error('Не удалось конвертировать в число');
             return n;
         });
         this.interpreter.builtins.set('вМассив', (val) => {
@@ -586,6 +603,113 @@ export class VladXEngine {
         this.interpreter.builtins.set('сдвигВлево', (a, n) => a << n);
         this.interpreter.builtins.set('сдвигВправо', (a, n) => a >> n);
         this.interpreter.builtins.set('беззнаковыйСдвиг', (a, n) => a >>> n);
+    }
+
+    /**
+     * Регистрация продвинутых встроенных функций
+     */
+    registerAdvancedBuiltins() {
+        // Кэш менеджер
+        this.interpreter.builtins.set('кэшПолучить', (key) => this.cacheManager.get(key));
+        this.interpreter.builtins.set('кэшУстановить', (key, value) => {
+            this.cacheManager.set(key, value);
+            return true;
+        });
+        this.interpreter.builtins.set('кэшУдалить', (key) => this.cacheManager.delete(key));
+        this.interpreter.builtins.set('кэшОчистить', () => {
+            this.cacheManager.clear();
+            return true;
+        });
+        this.interpreter.builtins.set('кэшСтатистика', () => this.cacheManager.getStats());
+
+        // Безопасность
+        this.interpreter.builtins.set('проверитьПуть', (path) => {
+            this.securityManager.checkPath(path);
+            return true;
+        });
+        this.interpreter.builtins.set('проверитьURL', (url) => {
+            this.securityManager.checkURL(url);
+            return true;
+        });
+        this.interpreter.builtins.set('санитизировать', (data) => this.securityManager.sanitizeJSON(data));
+        this.interpreter.builtins.set('экранироватьHTML', (str) => this.securityManager.escapeHTML(str));
+
+        // Отладчик
+        this.interpreter.builtins.set('точкаОстанова', (filename, line) => {
+            this.debugger.setBreakpoint(filename, line);
+            return true;
+        });
+        this.interpreter.builtins.set('удалитьТочкуОстанова', (filename, line) => {
+            this.debugger.removeBreakpoint(filename, line);
+            return true;
+        });
+        this.interpreter.builtins.set('пошаговыйРежим', () => {
+            this.debugger.stepInto();
+        });
+        this.interpreter.builtins.set('продолжить', () => {
+            this.debugger.continue();
+        });
+        this.interpreter.builtins.set('стекВызовов', () => this.debugger.getCallStack());
+        this.interpreter.builtins.set('локальныеПеременные', () => this.debugger.getLocals(this.debugger.currentFrame));
+
+        // Профайлер
+        this.interpreter.builtins.set('стартПрофилирования', () => {
+            this.profiler.start();
+            return true;
+        });
+        this.interpreter.builtins.set('стопПрофилирования', () => this.profiler.stop());
+        this.interpreter.builtins.set('результатыПрофилирования', () => this.profiler.getResults());
+
+        // Функциональное программирование
+        this.interpreter.builtins.set('каррировать', Functional.curry);
+        this.interpreter.builtins.set('композиция', Functional.compose);
+        this.interpreter.builtins.set('труба', Functional.pipe);
+        this.interpreter.builtins.set('мемоизировать', Functional.memoize);
+        this.interpreter.builtins.set('частично', Functional.partial);
+        this.interpreter.builtins.set('инвертировать', Functional.flip);
+        this.interpreter.builtins.set('одинРаз', Functional.once);
+        this.interpreter.builtins.set('отладить', Functional.trace);
+
+        // Maybe монада
+        this.interpreter.builtins.set('можетБыть', Functional.Maybe);
+        this.interpreter.builtins.set('илиИначе', (maybe, defaultValue) => maybe.getOrElse(defaultValue));
+
+        // Структуры данных
+        this.interpreter.builtins.set('Стек', () => new DataStructures.Stack());
+        this.interpreter.builtins.set('Очередь', () => new DataStructures.Queue());
+        this.interpreter.builtins.set('СвязныйСписок', () => new DataStructures.LinkedList());
+        this.interpreter.builtins.set('ПриоритетнаяОчередь', (comparator) => new DataStructures.PriorityQueue(comparator));
+        this.interpreter.builtins.set('Множество', () => new DataStructures.SetCustom());
+        this.interpreter.builtins.set('Карта', () => new DataStructures.MapCustom());
+        this.interpreter.builtins.set('Дерево', () => new DataStructures.Trie());
+        this.interpreter.builtins.set('БинарноеДерево', (compareFn) => new DataStructures.BinarySearchTree(compareFn));
+
+        // I/O операции
+        this.interpreter.builtins.set('файлПрочитатьПоток', (path, options) => this.ioOperations.readFileStream(path, options));
+        this.interpreter.builtins.set('файлЗаписатьПоток', (path, content, options) => this.ioOperations.writeFileStream(path, content, options));
+        this.interpreter.builtins.set('файлИнформация', (path) => this.ioOperations.getFileInfo(path));
+        this.interpreter.builtins.set('директорияПрочитать', (path, options) => this.ioOperations.readDirectory(path, options));
+        this.interpreter.builtins.set('директорияСоздать', (path, options) => this.ioOperations.createDirectory(path, options));
+        this.interpreter.builtins.set('файлУдалить', (path) => this.ioOperations.deleteFile(path));
+        this.interpreter.builtins.set('директорияУдалить', (path, options) => this.ioOperations.deleteDirectory(path, options));
+        this.interpreter.builtins.set('файлКопировать', (src, dest) => this.ioOperations.copyFile(src, dest));
+        this.interpreter.builtins.set('файлПереместить', (src, dest) => this.ioOperations.moveFile(src, dest));
+        this.interpreter.builtins.set('смотретьФайл', (path, callback, options) => this.ioOperations.watchFile(path, callback, options));
+        this.interpreter.builtins.set('найтиФайлы', (path, pattern, options) => this.ioOperations.findFiles(path, pattern, options));
+        this.interpreter.builtins.set('размерДиректории', (path) => this.ioOperations.getDirectorySize(path));
+        this.interpreter.builtins.set('mimeТип', (path) => this.ioOperations.getMimeType(path));
+
+        // Сетевые операции
+        this.interpreter.builtins.set('httpGet', (url, options) => this.networkOperations.get(url, options));
+        this.interpreter.builtins.set('httpPost', (url, data, options) => this.networkOperations.post(url, data, options));
+        this.interpreter.builtins.set('httpPut', (url, data, options) => this.networkOperations.put(url, data, options));
+        this.interpreter.builtins.set('httpDelete', (url, options) => this.networkOperations.delete(url, options));
+        this.interpreter.builtins.set('httpPatch', (url, data, options) => this.networkOperations.patch(url, data, options));
+        this.interpreter.builtins.set('httpЗапрос', (url, options) => this.networkOperations.request(url, options));
+        this.interpreter.builtins.set('скачатьФайл', (url, destPath) => this.networkOperations.downloadFile(url, destPath));
+        this.interpreter.builtins.set('загрузитьФайл', (url, filePath, options) => this.networkOperations.uploadFile(url, filePath, options));
+        this.interpreter.builtins.set('проверитьURL', (url) => this.networkOperations.checkUrl(url));
+        this.interpreter.builtins.set('multipartForm', () => this.networkOperations.createMultipartForm());
     }
 
     /**
@@ -699,66 +823,12 @@ export class VladXEngine {
      * REPL режим
      */
     async repl(inputStream = process.stdin, outputStream = process.stdout) {
-        const readline = await import('readline');
-        
-        const rl = readline.createInterface({
+        const repl = new REPL(this, {
             input: inputStream,
-            output: outputStream,
-            prompt: 'vladx> '
+            output: outputStream
         });
-        
-        let buffer = '';
-        let parenCount = 0;
-        let braceCount = 0;
-        let indentLevel = 0;
-        
-        rl.setPrompt('vladx» ');
-        rl.prompt();
-        
-        rl.on('line', async (line) => {
-            buffer += line + '\n';
-            
-            // Проверка на завершение блока
-            for (const char of line) {
-                if (char === '(') parenCount++;
-                if (char === ')') parenCount--;
-                if (char === '{') braceCount++;
-                if (char === '}') braceCount--;
-            }
-            
-            // Проверка отступов
-            const trimmed = line.trim();
-            if (trimmed.endsWith('{')) {
-                indentLevel++;
-            } else if (trimmed.startsWith('}') || trimmed.startsWith('иначе')) {
-                indentLevel = Math.max(0, indentLevel - 1);
-            }
-            
-            if (parenCount === 0 && braceCount === 0 && line.trim()) {
-                try {
-                    const result = this.execute(buffer, { filename: '<repl>' });
-                    if (result !== undefined) {
-                        outputStream.write(`→ ${JSON.stringify(result, null, 2)}\n`);
-                    }
-                } catch (error) {
-                    outputStream.write(`Ошибка: ${error.toString ? error.toString() : String(error)}\n`);
-                }
-                
-                buffer = '';
-                parenCount = 0;
-                braceCount = 0;
-                indentLevel = 0;
-                rl.setPrompt('vladx» ');
-            } else {
-                rl.setPrompt('     ' + '  '.repeat(indentLevel) + '· ');
-            }
-            
-            rl.prompt();
-        });
-        
-        rl.on('close', () => {
-            outputStream.write('\nДо встречи!\n');
-        });
+
+        await repl.start();
     }
 
     /**
@@ -819,40 +889,40 @@ export class VladXEngine {
                 return JSON.stringify(node.value);
             
             case 'FunctionDeclaration':
-                const params = node.parameters.map(p => p.name).join(', ');
+                const params = node.params.map(p => p.name).join(', ');
                 const body = node.body.map(b => this.nodeToJs(b)).join(';\n');
                 return `function ${node.name}(${params}) { ${body} }`;
-            
+
             case 'CallExpression':
-                const args = node.arguments.map(a => this.nodeToJs(a)).join(', ');
+                const args = node.args.map(a => this.nodeToJs(a)).join(', ');
                 return `${node.callee}(${args})`;
             
             case 'IfStatement':
                 const condition = this.nodeToJs(node.condition);
-                const thenBranch = node.thenBranch.map(b => this.nodeToJs(b)).join(';\n');
+                const thenBranch = node.thenBranch.body ? node.thenBranch.body.map(b => this.nodeToJs(b)).join(';\n') : this.nodeToJs(node.thenBranch);
                 let result = `if (${condition}) { ${thenBranch} }`;
                 if (node.elseBranch) {
-                    const elseBranch = node.elseBranch.map(b => this.nodeToJs(b)).join(';\n');
+                    const elseBranch = node.elseBranch.body ? node.elseBranch.body.map(b => this.nodeToJs(b)).join(';\n') : this.nodeToJs(node.elseBranch);
                     result += ` else { ${elseBranch} }`;
                 }
                 return result;
-            
+
             case 'WhileStatement':
                 const whileCond = this.nodeToJs(node.condition);
-                const whileBody = node.body.map(b => this.nodeToJs(b)).join(';\n');
+                const whileBody = node.thenBranch.body ? node.thenBranch.body.map(b => this.nodeToJs(b)).join(';\n') : this.nodeToJs(node.body);
                 return `while (${whileCond}) { ${whileBody} }`;
-            
+
             case 'ForStatement':
                 const forInit = this.nodeToJs(node.initializer);
                 const forCond = this.nodeToJs(node.condition);
                 const forUpdate = this.nodeToJs(node.update);
-                const forBody = node.body.map(b => this.nodeToJs(b)).join(';\n');
+                const forBody = node.thenBranch.body ? node.thenBranch.body.map(b => this.nodeToJs(b)).join(';\n') : this.nodeToJs(node.body);
                 return `for (${forInit}; ${forCond}; ${forUpdate}) { ${forBody} }`;
-            
+
             case 'ClassDeclaration':
                 const methods = node.methods.map(m => {
-                    const methodParams = m.parameters.map(p => p.name).join(', ');
-                    const methodBody = m.body.map(b => this.nodeToJs(b)).join(';\n');
+                    const methodParams = m.params.map(p => p.name).join(', ');
+                    const methodBody = m.thenBranch.body ? m.thenBranch.body.map(b => this.nodeToJs(b)).join(';\n') : this.nodeToJs(m.body);
                     return `${m.name}(${methodParams}) { ${methodBody} }`;
                 }).join(', ');
                 return `class ${node.name} { ${methods} }`;

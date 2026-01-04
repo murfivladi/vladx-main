@@ -598,11 +598,11 @@ export class Parser {
     parseSwitchStatement() {
         this.advance(); // consume SWITCH or ВЫБОР
 
-        this.consume('LPAREN', null, 'Expected ( after switch');
+        this.consume('LPAREN', null, 'Ожидалось ( после выбор');
         const condition = this.parseExpression();
-        this.consume('RPAREN', null, 'Expected ) after switch condition');
+        this.consume('RPAREN', null, 'Ожидалось ) после условия выбор');
 
-        this.consume('LBRACE', null, 'Expected { after switch condition');
+        this.consume('LBRACE', null, 'Ожидалось { после выбор');
 
         const cases = [];
         let defaultCase = null;
@@ -634,7 +634,7 @@ export class Parser {
                 });
             } else if (this.check('DEFAULT') || this.check('ПоУмолчанию')) { // поУмолчанию
                 this.advance(); // consume DEFAULT or ПоУмолчанию
-                this.consume('COLON', null, 'Expected : after default');
+                this.consume('COLON', null, 'Ожидалось : после поумолчанию');
 
                 const consequent = [];
 
@@ -659,7 +659,7 @@ export class Parser {
             }
         }
 
-        this.consume('RBRACE', null, 'Expected } after switch body');
+        this.consume('RBRACE', null, 'Ожидалось } после тела выбор');
 
         return new ASTNodes.SwitchStatement(condition, cases, defaultCase);
     }
@@ -974,8 +974,8 @@ export class Parser {
             case 'ИМПОРТ':
                 return this.parseImportExpression();
 
-            case 'IF':
-                return this.parseTernary();
+            case 'AWAIT':
+                return this.parseAwaitExpression();
 
             case 'AWAIT':
                 return this.parseAwaitExpression();
@@ -1238,30 +1238,30 @@ export class Parser {
      */
     parseGroupedOrSequence() {
         this.advance(); // consume (
-        
+
         // Проверяем, пустая ли группа или последовательность
         if (this.check('RPAREN')) {
             this.advance();
             return new ASTNodes.ArrayExpression([]);
         }
-        
+
         const expr = this.parseExpression();
-        
+
         if (this.check('COMMA')) {
             // Последовательность (a, b, c)
             const expressions = [expr];
-            
+
             while (this.check('COMMA')) {
                 this.advance();
                 expressions.push(this.parseExpression());
             }
-            
+
             this.consume('RPAREN', null, 'Ожидалось )');
-            
+
             // Возвращаем последовательность
             return new ASTNodes.SequenceExpression(expressions);
         }
-        
+
         this.consume('RPAREN', null, 'Ожидалось )');
         return expr;
     }

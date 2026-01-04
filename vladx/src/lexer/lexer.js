@@ -42,9 +42,11 @@ export class Lexer {
                 }
 
                 // Комментарии
-                if (this.currentChar === '#' ||
-                    (this.currentChar === '/' && this.peek() === '*') ||
-                    (this.currentChar === '/' && this.peek() === '/')) {
+                if (this.currentChar === '#') {
+                    this.skipComment();
+                    continue;
+                }
+                if (this.currentChar === '/' && (this.peek() === '*' || this.peek() === '/')) {
                     this.skipComment();
                     continue;
                 }
@@ -81,14 +83,6 @@ export class Lexer {
             const token = this.readOperator();
             if (token) {
                 this.tokens.push(token);
-                continue;
-            } else if (this.currentChar === '/' && this.peek() === '*') {
-                // Это начало многострочного комментария, пропускаем его
-                this.skipComment();
-                continue;
-            } else if (this.currentChar === '/' && this.peek() === '/') {
-                // Это начало однострочного комментария, пропускаем его
-                this.skipComment();
                 continue;
             }
 
@@ -402,7 +396,8 @@ export class Lexer {
         'async': 'ASYNC',
         'асинх': 'ASYNC',
         'await': 'AWAIT',
-        'ожидать': 'AWAIT'
+        'ожидать': 'AWAIT',
+        'не': 'NOT'
     };
 
     const lowerValue = value.toLowerCase();
