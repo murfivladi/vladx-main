@@ -27,6 +27,7 @@ export class Interpreter {
         this.currentFunction = null;
         this.isReturn = false;
         this.returnValue = null;
+        this.currentInstance = null;
         
         // Обработка ошибок
         this.errorHandler = null;
@@ -269,6 +270,15 @@ export class Interpreter {
             case 'Identifier':
                 return this.evaluateIdentifier(expr);
 
+            case 'ThisExpression':
+                return this.evaluateThisExpression(expr);
+
+            case 'SuperExpression':
+                return this.evaluateSuperExpression(expr);
+
+            case 'NewExpression':
+                return this.evaluateNewExpression(expr);
+
             case 'BinaryExpression':
                 return this.evaluateBinaryExpression(expr);
 
@@ -330,7 +340,7 @@ export class Interpreter {
                 return this.evaluateObjectPattern(expr);
 
             default:
-                throw new Error(`Неизвестный тип выражения: '${expr.type}'. Доступные типы: Literal, Identifier, BinaryExpression, UnaryExpression, CallExpression, MemberExpression, Assignment, MemberAssignment, AssignmentExpression, CompoundAssignmentExpression, BitwiseExpression, TemplateLiteral, ArrayExpression, ObjectExpression, FunctionDeclaration, ArrowFunctionExpression, TernaryExpression, ImportExpression, SequenceExpression, ArrayPattern, ObjectPattern`);
+                throw new Error(`Неизвестный тип выражения: '${expr.type}'. Доступные типы: Literal, Identifier, ThisExpression, SuperExpression, BinaryExpression, UnaryExpression, CallExpression, MemberExpression, Assignment, MemberAssignment, AssignmentExpression, CompoundAssignmentExpression, BitwiseExpression, TemplateLiteral, ArrayExpression, ObjectExpression, FunctionDeclaration, ArrowFunctionExpression, TernaryExpression, ImportExpression, SequenceExpression, ArrayPattern, ObjectPattern, NewExpression`);
         }
     }
 
@@ -362,6 +372,81 @@ export class Interpreter {
      */
     evaluateIdentifier(expr) {
         return this.currentEnv.get(expr.name);
+    }
+
+    /**
+     * This выражение
+     */
+    evaluateThisExpression(expr) {
+        if (this.currentInstance && this.currentInstance.type === 'instance') {
+            return this.currentInstance;
+        }
+        throw new Error('Использование "это" (this) вне контекста метода класса');
+    }
+
+    /**
+     * Super выражение
+     */
+    evaluateSuperExpression(expr) {
+        if (!this.currentInstance || this.currentInstance.type !== 'instance') {
+            throw new Error('Использование "super" вне контекста метода класса');
+        }
+        if (!this.currentInstance.prototype || !this.currentInstance.prototype.prototype) {
+            throw new Error('У класса нет родительского класса');
+        }
+
+        const superClass = this.currentInstance.prototype.prototype;
+        const superInstance = VladXObject.instance(superClass);
+        superInstance.value = this.currentInstance.value;
+        return superInstance;
+    }
+
+    /**
+     * New expression - создание экземпляра класса
+     */
+    async evaluateNewExpression(expr) {
+        const callee = await this.evaluateExpression(expr.callee);
+
+        if (!callee || callee.type !== 'class') {
+            if (callee) {
+                throw new Error(`new можно использовать только с классами, получено: ${callee.type}`);
+            } else {
+                throw new Error('new можно использовать только с классами, callee is null');
+            }
+        }
+
+        const instance = VladXObject.instance(callee);
+
+        const args = [];
+        for (const arg of expr.args) {
+            args.push(await this.evaluateExpression(arg));
+        }
+
+        if (callee.methods && (callee.methods.has('конструктор') || callee.methods.has('constructor'))) {
+            const constructorMethod = callee.methods.has('конструктор') ? callee.methods.get('конструктор') : callee.methods.get('constructor');
+
+            const previousInstance = this.currentInstance;
+            this.currentInstance = instance;
+            try {
+                await this.executeFunction(constructorMethod, args);
+            } finally {
+                this.currentInstance = previousInstance;
+            }
+        } else if (callee.prototype && callee.prototype.methods && (callee.prototype.methods.has('конструктор') || callee.prototype.methods.has('constructor'))) {
+            const parentConstructorMethod = callee.prototype.methods.has('конструктор') ? callee.prototype.methods.get('конструктор') : callee.prototype.methods.get('constructor');
+
+            const previousInstance = this.currentInstance;
+            const superInstance = VladXObject.instance(callee.prototype);
+            superInstance.value = instance.value;
+            this.currentInstance = superInstance;
+            try {
+                await this.executeFunction(parentConstructorMethod, args);
+            } finally {
+                this.currentInstance = previousInstance;
+            }
+        }
+
+        return instance;
     }
 
     /**
@@ -426,9 +511,17 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
      * Вызов функции
      */
     async evaluateCallExpression(expr) {
+        let instance = null;
+
+        if (expr.callee.type === 'MemberExpression') {
+            const object = await this.evaluateExpression(expr.callee.object);
+            if (object && object.type === 'instance') {
+                instance = object;
+            }
+        }
+
         const callee = await this.evaluateExpression(expr.callee);
 
-        // Обработка аргументов с учетом spread оператора
         const args = [];
         for (const arg of expr.args) {
             if (arg && arg.type === 'SpreadElement') {
@@ -438,7 +531,6 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
                 if (Array.isArray(spreadArray)) {
                     args.push(...spreadArray);
                 } else {
-                    // Если это не массив, просто добавляем значение
                     args.push(spreadValue);
                 }
             } else {
@@ -446,25 +538,19 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
             }
         }
 
-        // Рекурсивная функция для преобразования VladXObject в нативные значения
         const convertToNative = (val) => {
-            // Проверяем, является ли это VladXObject
             if (val && typeof val === 'object' && val.type !== undefined) {
-                // Не конвертируем функции и замыкания, возвращаем как есть
                 if (val.type === 'function' || val.type === 'closure') {
                     return val;
                 }
 
-                // Для null значений возвращаем как есть
                 if (val.type === 'null') {
                     return val;
                 }
 
-                // Для других типов, если есть значение, возвращаем его
                 if (val.value !== undefined) {
                     const rawValue = val.value;
 
-                    // Рекурсивно конвертируем вложенные объекты и массивы
                     if (Array.isArray(rawValue)) {
                         return rawValue.map(item => convertToNative(item));
                     } else if (rawValue && typeof rawValue === 'object' && rawValue.constructor === Object) {
@@ -483,32 +569,34 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
             return val;
         };
 
-        // Преобразуем VladXObject аргументы в нативные значения
         const nativeArgs = args.map(arg => convertToNative(arg));
 
         if (callee && callee.isNative) {
             try {
                 const result = callee.value(...nativeArgs);
-                // Если результат - промис, дожидаемся его
                 if (result instanceof Promise) {
                     return await result;
                 }
                 return result;
             } catch (error) {
-                // Если это VladXObject ошибка, преобразуем её в стандартную ошибку JavaScript
                 if (error && error.type === 'error') {
                     throw new Error(error.value || 'Неизвестная ошибка во встроенной функции');
                 }
-                // Иначе перебросим оригинальную ошибку
                 throw error;
             }
         }
 
         if (callee && (callee.type === 'function' || callee.type === 'closure')) {
-            return this.executeFunction(callee, args);
+            const previousInstance = this.currentInstance;
+            this.currentInstance = instance;
+            try {
+                const result = await this.executeFunction(callee, args);
+                return result;
+            } finally {
+                this.currentInstance = previousInstance;
+            }
         }
 
-        // Формируем понятное сообщение об ошибке
         let calleeInfo = 'неизвестное значение';
         if (callee) {
             if (callee.type === 'string') {
@@ -899,24 +987,28 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
 
         // Handle array element assignment: array[index] = value
         if (object.type === 'array' && object.value && Array.isArray(object.value)) {
-            // Convert index to number if it's a string representation of a number
             const index = typeof indexValue === 'string' ? parseInt(indexValue, 10) : indexValue;
 
             if (typeof index === 'number' && index >= 0 && index < object.value.length) {
                 object.value[index] = value;
             } else if (typeof index === 'number' && index === object.value.length) {
-                // Allow pushing to the end of the array
                 object.value.push(value);
             } else {
                 throw new Error(`Недопустимый индекс массива: ${index}, длина массива: ${object.value.length}`);
             }
         }
-        // Handle object property assignment: obj.property = value
+        else if (object.type === 'instance' && object.value && typeof object.value === 'object') {
+            const propName = expr.property.name || String(indexValue);
+            object.value[propName] = value;
+        }
+        else if (object.type === 'class' && !expr.computed) {
+            const propName = expr.property.name;
+            object[propName] = value;
+        }
         else if (object.type === 'object' && object.value && typeof object.value === 'object') {
             const propName = expr.property.name || String(indexValue);
             object.value[propName] = value;
         }
-        // Handle regular object property assignment
         else if (object && typeof object === 'object' && !object.type) {
             const propName = expr.property.name || String(indexValue);
             object[propName] = value;
@@ -959,28 +1051,39 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
                 return object[key] !== undefined ? object[key] : VladXObject.null();
             }
         } else {
-            // Статический доступ: obj.property
             const propName = expr.property.name;
 
-            // Если это VladXObject, проверяем в object.value
-            if (object.type !== undefined && object.value && object.value[propName] !== undefined) {
+            if (object.type === 'class' && object.staticMethods && object.staticMethods.has(propName)) {
+                const staticMethod = object.staticMethods.get(propName);
+                return staticMethod;
+            }
+
+            if (object.type === 'instance' && object.prototype && object.prototype.methods && object.prototype.methods.has(propName)) {
+                const method = object.prototype.methods.get(propName);
+                return method;
+            }
+
+            if (object.type === 'instance' && object.value && typeof object.value === 'object' && object.value[propName] !== undefined) {
                 const val = object.value[propName];
-                // Если значение уже VladXObject, возвращаем как есть
                 if (val && typeof val === 'object' && val.type !== undefined) {
                     return val;
                 }
-                // Иначе создаём VladXObject
                 return VladXObject.fromJS(val);
             }
 
-            // Если это обычный JS объект
-            if (object[propName] !== undefined) {
-                const val = object[propName];
-                // Если значение уже VladXObject, возвращаем как есть
+            if (object.type !== undefined && object.value && object.value[propName] !== undefined) {
+                const val = object.value[propName];
                 if (val && typeof val === 'object' && val.type !== undefined) {
                     return val;
                 }
-                // Иначе создаём VladXObject
+                return VladXObject.fromJS(val);
+            }
+
+            if (object[propName] !== undefined) {
+                const val = object[propName];
+                if (val && typeof val === 'object' && val.type !== undefined) {
+                    return val;
+                }
                 return VladXObject.fromJS(val);
             }
         }
@@ -1307,9 +1410,17 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
      * Класс
      */
     async evaluateClassDeclaration(stmt) {
-        const classObj = VladXObject.class(stmt.name);
-        
-        // Методы - используем текущее окружение без клонирования
+        const methods = new Map();
+        const staticMethods = new Map();
+        let superClass = null;
+
+        if (stmt.superClass) {
+            superClass = this.currentEnv.get(stmt.superClass);
+            if (!superClass || superClass.type !== 'class') {
+                throw new Error(`Родительский класс '${stmt.superClass}' не найден или не является классом`);
+            }
+        }
+
         if (stmt.methods) {
             for (const method of stmt.methods) {
                 const methodClosure = VladXObject.closure({
@@ -1319,11 +1430,16 @@ const rval = (right && typeof right === 'object' && 'value' in right) ? right.va
                     body: method.body,
                     isAsync: method.isAsync
                 }, this.currentEnv, method.name);
-                
-                classObj.methods.set(method.name, methodClosure);
+
+                if (method.isStatic) {
+                    staticMethods.set(method.name, methodClosure);
+                } else {
+                    methods.set(method.name, methodClosure);
+                }
             }
         }
-        
+
+        const classObj = VladXObject.class(stmt.name, methods, staticMethods, superClass);
         this.currentEnv.define(stmt.name, classObj);
         return VladXObject.null();
     }

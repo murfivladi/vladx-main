@@ -1,34 +1,8 @@
 {
-  "name": "vladx",
-  "version": "1.0.0",
-  "description": "VladX - Мощный программный язык с русским синтаксисом",
-  "main": "src/vladx.js",
-  "bin": {
-    "vlad": "./bin/vlad.js",
-    "vladpm": "./bin/vladpm.js"
-  },
   "type": "module",
-  "scripts": {
-    "start": "node bin/vlad.js",
-    "test": "node bin/vlad.js examples/hello.vx",
-    "registry": "node registry-server.js",
-    "dev": "nodemon registry-server.js"
-  },
-  "keywords": [
-    "programming-language",
-    "interpreter",
-    "russian",
-    "vladx"
-  ],
-  "author": "VladX Team",
-  "license": "MIT",
   "dependencies": {
-    "tar": "^7.5.2",
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "multer": "^1.4.5-lts.1",
-    "jsonwebtoken": "^9.0.0",
-    "bcrypt": "^5.1.0",
-    "express-rate-limit": "^6.7.0"
+    "crypto": "^1.0.1",
+    "lodash": "^4.17.21",
+    "tar": "^7.5.2"
   }
 }
